@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>แสดงข้อมูลจาก Google Sheets</title>
+    <style>
+        body {
+            font-family: 'Arial', sans-serif;
+            background-color: #f4f4f9;
+            margin: 20px;
+        }
+        h1 {
+            text-align: center;
+            color: #333;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+            background-color: white;
+        }
+        th, td {
+            padding: 12px;
+            text-align: center;
+            border: 1px solid #ddd;
+        }
+        th {
+            background-color: #4CAF50;
+            color: white;
+            font-weight: bold;
+        }
+        tr:nth-child(even) {
+            background-color: #f9f9f9;
+        }
+        tr:hover {
+            background-color: #f1f1f1;
+        }
+        .highlight {
+            background-color: red;
+            color: white;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <h1>แสดงข้อมูลจาก Google Sheets</h1>
+    <table id="data-table">
+        <thead>
+            <tr id="table-header">
+                <!-- หัวข้อของตารางจะถูกเพิ่มโดย JavaScript -->
+            </tr>
+        </thead>
+        <tbody>
+            <!-- ข้อมูลจะถูกเพิ่มที่นี่โดย JavaScript -->
+        </tbody>
+    </table>
+
+    <script>
+        async function fetchData() {
+            const sheetId = '157wTQd2rSPGv4LSCJmlUOXnLffnNs9WyvnHzRr0sqoY'; // เปลี่ยนเป็น Spreadsheet ID ของคุณ
+            const url = `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:json`;
+            
+            try {
+                const response = await fetch(url);
+                const text = await response.text();
+                const json = JSON.parse(text.substring(47, text.length - 2)); // แปลง JSON
+                displayData(json);
+            } catch (error) {
+                console.error("❌ โหลดข้อมูลล้มเหลว:", error);
+                document.getElementById("data-table").innerHTML = "<p>❌ ไม่สามารถโหลดข้อมูลได้</p>";
+            }
+        }
+
+        function parseCustomDate(dateString) {
+            // แยกส่วนข้อมูลจากรูปแบบ Date(2025,1,1,14,22,37)
+            const regex = /Date\((\d+),(\d+),(\d+),(\d+),(\d+),(\d+)\)/;
+            const match = dateString.match(regex);
+
+            if (match) {
+                // สร้างวันที่จากข้อมูลที่แยกได้
+                const year = parseInt(match[1]);
+                const month = parseInt(match[2]); // เดือนใน JavaScript เริ่มจาก 0 (0 = มกราคม)
+                const day = parseInt(match[3]);
+                const hour = parseInt(match[4]);
+                const minute = parseInt(match[5]);
+                const second = parseInt(match[6]);
+
+                // สร้างวันที่ใหม่
+                return new Date(year, month, day, hour, minute, second);
+            } else {
+                return null; // หากรูปแบบไม่ตรง
+            }
+        }
+
+        function displayData(json) {
+            const tableHeader = document.getElementById("table-header");
+            const tableBody = document.querySelector("#data-table tbody");
+            tableHeader.innerHTML = "";
+            tableBody.innerHTML = "";
+
+            // ดึงชื่อคอลัมน์
+            const headers = json.table.cols.map(col => col.label).filter(label => label);
+            const columnsToShow = headers.filter(header => 
+                header !== "latitude" && header !== "longitude" && header !== ""
+            );
+
+            // สร้างหัวตาราง
+            columnsToShow.forEach(header => {
+                const th = document.createElement("th");
+                th.textContent = header;
+                tableHeader.appendChild(th);
+            });
+
+            // ดึงข้อมูลจากชีต
+            json.table.rows.forEach(row => {
+                const tr = document.createElement("tr");
+                row.c.forEach((cell, index) => {
+                    const header = headers[index];
+                    if (columnsToShow.includes(header)) {
+                        const td = document.createElement("td");
+                        if (header === "Time Stamp" && cell && cell.v) {
+                            // แปลงรูปแบบวันที่
+                            const date = parseCustomDate(cell.v);
+                            if (date) {
+                                const formattedDate = date.toLocaleDateString("th-TH", {
+                                    year: "numeric",
+                                    month: "2-digit",
+                                    day: "2-digit",
+                                    hour: "2-digit",
+                                    minute: "2-digit",
+                                    second: "2-digit"
+                                });
+                                td.textContent = formattedDate;
+                            } else {
+                                td.textContent = "รูปแบบวันที่ไม่ถูกต้อง";
+                            }
+                        } else if (header === "สถานะ" && cell && cell.v === "ผิดปกติ") {
+                            td.textContent = cell.v;
+                            td.classList.add("highlight"); // ไฮไลท์คำว่า "ผิดปกติ"
+                        } else {
+                            td.textContent = cell ? cell.v : "";
+                        }
+                        tr.appendChild(td);
+                    }
+                });
+                tableBody.appendChild(tr);
+            });
+        }
+
+        // อัปเดตข้อมูลทุก 3 วินาที
+        setInterval(fetchData, 3000);
+        // ดึงข้อมูลครั้งแรกเมื่อโหลดหน้า
+        fetchData();
+    </script>
+</body>
+</html>
